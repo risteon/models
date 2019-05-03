@@ -76,6 +76,14 @@ _CITYSCAPES_INFORMATION = DatasetDescriptor(
     ignore_label=255,
 )
 
+_KITTI_INFORMATION = DatasetDescriptor(
+    splits_to_sizes={
+        'training': 200,
+    },
+    num_classes=19,
+    ignore_label=255,
+)
+
 _PASCAL_VOC_SEG_INFORMATION = DatasetDescriptor(
     splits_to_sizes={
         'train': 1464,
@@ -98,6 +106,7 @@ _ADE20K_INFORMATION = DatasetDescriptor(
 
 _DATASETS_INFORMATION = {
     'cityscapes': _CITYSCAPES_INFORMATION,
+    'kitti': _KITTI_INFORMATION,
     'pascal_voc_seg': _PASCAL_VOC_SEG_INFORMATION,
     'ade20k': _ADE20K_INFORMATION,
 }
