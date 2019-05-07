@@ -142,7 +142,7 @@ def main(unused_argv):
 
     # Define the evaluation metric.
     miou, update_op = tf.metrics.mean_iou(
-        predictions, labels, dataset.num_of_classes, weights=weights)
+        labels, predictions, dataset.num_of_classes, weights=weights)
     tf.summary.scalar(predictions_tag, miou)
 
     summary_op = tf.summary.merge_all()
@@ -161,13 +161,18 @@ def main(unused_argv):
     tf.contrib.tfprof.model_analyzer.print_model_analysis(
         tf.get_default_graph(),
         tfprof_options=tf.contrib.tfprof.model_analyzer.FLOAT_OPS_OPTIONS)
-    tf.contrib.training.evaluate_repeatedly(
+    # tf.contrib.training.evaluate_repeatedly(
+    #     master=FLAGS.master,
+    #     checkpoint_dir=FLAGS.checkpoint_dir,
+    #     eval_ops=[update_op],
+    #     max_number_of_evaluations=num_eval_iters,
+    #     hooks=hooks,
+    #     eval_interval_secs=FLAGS.eval_interval_secs)
+    tf.contrib.training.evaluate_once(
         master=FLAGS.master,
-        checkpoint_dir=FLAGS.checkpoint_dir,
+        checkpoint_path=FLAGS.checkpoint_dir,
         eval_ops=[update_op],
-        max_number_of_evaluations=num_eval_iters,
-        hooks=hooks,
-        eval_interval_secs=FLAGS.eval_interval_secs)
+        hooks=hooks)
 
 
 if __name__ == '__main__':

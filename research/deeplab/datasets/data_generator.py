@@ -274,6 +274,19 @@ class Dataset(object):
 
     return sample
 
+  def _read_from_png(self, filepath):
+
+    file = tf.io.read_file(filepath)
+    img = tf.io.decode_png(file, channels=3)
+
+    sample = {
+        common.IMAGE: img,
+        common.IMAGE_NAME: filepath,
+        common.HEIGHT: tf.shape(img)[0],
+        common.WIDTH: tf.shape(img)[1],
+    }
+    return sample
+
   def _preprocess_image(self, sample):
     """Preprocesses the image and label.
 
@@ -287,7 +300,7 @@ class Dataset(object):
       ValueError: Ground truth label not provided during training.
     """
     image = sample[common.IMAGE]
-    label = sample[common.LABELS_CLASS]
+    label = sample.get(common.LABELS_CLASS, None)
 
     original_image, image, label = input_preprocess.preprocess_image_and_label(
         image=image,
@@ -319,19 +332,25 @@ class Dataset(object):
 
     return sample
 
-  def get_one_shot_iterator(self):
+  def get_one_shot_iterator(self, kitti_png_mode=False):
     """Gets an iterator that iterates across the dataset once.
 
     Returns:
       An iterator of type tf.data.Iterator.
     """
 
-    files = self._get_all_files()
+    if kitti_png_mode:
+        files = self._get_all_files(file_pattern='0000*.png')
+        dataset = tf.data.Dataset.from_tensor_slices(tf.convert_to_tensor(files))\
+            .map(self._read_from_png)\
+            .map(self._preprocess_image, num_parallel_calls=self.num_readers)
 
-    dataset = (
-        tf.data.TFRecordDataset(files, num_parallel_reads=self.num_readers)
-        .map(self._parse_function, num_parallel_calls=self.num_readers)
-        .map(self._preprocess_image, num_parallel_calls=self.num_readers))
+    else:
+        files = self._get_all_files(file_pattern=_FILE_PATTERN % self.split_name)
+        dataset = (
+            tf.data.TFRecordDataset(files, num_parallel_reads=self.num_readers)
+            .map(self._parse_function, num_parallel_calls=self.num_readers)
+            .map(self._preprocess_image, num_parallel_calls=self.num_readers))
 
     if self.should_shuffle:
       dataset = dataset.shuffle(buffer_size=100)
@@ -344,13 +363,11 @@ class Dataset(object):
     dataset = dataset.batch(self.batch_size).prefetch(self.batch_size)
     return dataset.make_one_shot_iterator()
 
-  def _get_all_files(self):
+  def _get_all_files(self, file_pattern):
     """Gets all the files to read data from.
 
     Returns:
       A list of input files.
     """
-    file_pattern = _FILE_PATTERN
-    file_pattern = os.path.join(self.dataset_dir,
-                                file_pattern % self.split_name)
-    return tf.gfile.Glob(file_pattern)
+    file_pattern = os.path.join(self.dataset_dir, file_pattern)
+    return sorted(tf.gfile.Glob(file_pattern))

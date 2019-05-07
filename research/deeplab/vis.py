@@ -86,6 +86,11 @@ flags.DEFINE_integer('max_number_of_iterations', 0,
                      'Maximum number of visualization iterations. Will loop '
                      'indefinitely upon nonpositive values.')
 
+
+flags.DEFINE_boolean('folder_png_mode', False,
+                     'Read png images from folder.')
+
+
 # The folder where semantic segmentation predictions are saved.
 _SEMANTIC_PREDICTION_SAVE_FOLDER = 'segmentation_results'
 
@@ -214,7 +219,7 @@ def main(unused_argv):
   tf.logging.info('Visualizing on %s set', FLAGS.vis_split)
 
   with tf.Graph().as_default():
-    samples = dataset.get_one_shot_iterator().get_next()
+    samples = dataset.get_one_shot_iterator(kitti_png_mode=FLAGS.folder_png_mode).get_next()
 
     model_options = common.ModelOptions(
         outputs_to_num_classes={common.OUTPUT_TYPE: dataset.num_of_classes},
@@ -262,8 +267,14 @@ def main(unused_argv):
     num_iteration = 0
     max_num_iteration = FLAGS.max_number_of_iterations
 
-    checkpoints_iterator = tf.contrib.training.checkpoints_iterator(
-        FLAGS.checkpoint_dir, min_interval_secs=FLAGS.eval_interval_secs)
+    # checkpoints_iterator = tf.contrib.training.checkpoints_iterator(
+    #     FLAGS.checkpoint_dir, min_interval_secs=FLAGS.eval_interval_secs)
+    # checkpoints_iterator = [
+    #     FLAGS.checkpoint_dir + '/model.ckpt'
+    # ]
+    checkpoints_iterator = [
+        FLAGS.checkpoint_dir,
+    ]
     for checkpoint_path in checkpoints_iterator:
       if max_num_iteration > 0 and num_iteration > max_num_iteration:
         break
