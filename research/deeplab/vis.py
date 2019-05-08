@@ -90,6 +90,9 @@ flags.DEFINE_integer('max_number_of_iterations', 0,
 flags.DEFINE_boolean('folder_png_mode', False,
                      'Read png images from folder.')
 
+flags.DEFINE_boolean('save_original_image', True,
+                     'Add original RGB image to output.')
+
 
 # The folder where semantic segmentation predictions are saved.
 _SEMANTIC_PREDICTION_SAVE_FOLDER = 'segmentation_results'
@@ -132,7 +135,7 @@ def _convert_train_id_to_eval_id(prediction, train_id_to_eval_id):
 
 def _process_batch(sess, original_images, semantic_predictions, image_names,
                    image_heights, image_widths, image_id_offset, save_dir,
-                   raw_save_dir, train_id_to_eval_id=None):
+                   raw_save_dir, train_id_to_eval_id=None, save_original_image=True):
   """Evaluates one single batch qualitatively.
 
   Args:
@@ -163,9 +166,10 @@ def _process_batch(sess, original_images, semantic_predictions, image_names,
     crop_semantic_prediction = semantic_prediction[:image_height, :image_width]
 
     # Save image.
-    save_annotation.save_annotation(
-        original_image, save_dir, _IMAGE_FORMAT % (image_id_offset + i),
-        add_colormap=False)
+    if save_original_image:
+        save_annotation.save_annotation(
+            original_image, save_dir, _IMAGE_FORMAT % (image_id_offset + i),
+            add_colormap=False)
 
     # Save prediction.
     save_annotation.save_annotation(
@@ -210,11 +214,13 @@ def main(unused_argv):
 
   # Prepare for visualization.
   tf.gfile.MakeDirs(FLAGS.vis_logdir)
-  save_dir = os.path.join(FLAGS.vis_logdir, _SEMANTIC_PREDICTION_SAVE_FOLDER)
+  # save_dir = os.path.join(FLAGS.vis_logdir, _SEMANTIC_PREDICTION_SAVE_FOLDER)
+  save_dir = FLAGS.vis_logdir
   tf.gfile.MakeDirs(save_dir)
   raw_save_dir = os.path.join(
       FLAGS.vis_logdir, _RAW_SEMANTIC_PREDICTION_SAVE_FOLDER)
-  tf.gfile.MakeDirs(raw_save_dir)
+  if FLAGS.also_save_raw_predictions:
+      tf.gfile.MakeDirs(raw_save_dir)
 
   tf.logging.info('Visualizing on %s set', FLAGS.vis_split)
 
@@ -308,7 +314,8 @@ def main(unused_argv):
                          image_id_offset=image_id_offset,
                          save_dir=save_dir,
                          raw_save_dir=raw_save_dir,
-                         train_id_to_eval_id=train_id_to_eval_id)
+                         train_id_to_eval_id=train_id_to_eval_id,
+                         save_original_image=FLAGS.save_original_image)
           image_id_offset += FLAGS.vis_batch_size
           batch += 1
 
