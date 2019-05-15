@@ -93,6 +93,9 @@ flags.DEFINE_boolean('folder_png_mode', False,
 flags.DEFINE_boolean('save_original_image', True,
                      'Add original RGB image to output.')
 
+flags.DEFINE_boolean('prob_output_mode', False,
+                     'Write original predicted probabilities.')
+
 
 # The folder where semantic segmentation predictions are saved.
 _SEMANTIC_PREDICTION_SAVE_FOLDER = 'segmentation_results'
@@ -189,6 +192,36 @@ def _process_batch(sess, original_images, semantic_predictions, image_names,
           add_colormap=False)
 
 
+def _process_batch2(sess, original_images, semantic_predictions,
+                    prob_predictions, image_names,
+                    image_heights, image_widths, image_id_offset, save_dir,
+                    train_id_to_eval_id=None):
+  (semantic_predictions,
+   prob_predictions,
+   image_names,
+   image_heights,
+   image_widths) = sess.run([semantic_predictions, prob_predictions,
+                             image_names, image_heights, image_widths])
+
+  num_image = semantic_predictions.shape[0]
+  for i in range(num_image):
+    image_height = np.squeeze(image_heights[i])
+    image_width = np.squeeze(image_widths[i])
+    semantic_prediction = np.squeeze(semantic_predictions[i])
+    crop_semantic_prediction = semantic_prediction[:image_height, :image_width]
+
+    np.savez(os.path.join(save_dir,
+                          "{}_full".format(os.path.basename(image_names[i].decode('utf-8'))[:-4])),
+             **{k: x[i] for k, x in prob_predictions.items()},
+             target_size=np.asarray([image_height, image_width]),
+             output_size=np.asarray(semantic_prediction.shape))
+
+    save_annotation.save_annotation(
+        crop_semantic_prediction, save_dir,
+        os.path.basename(image_names[i].decode('utf-8'))[:-4], add_colormap=True,
+        colormap_type=FLAGS.colormap_type)
+
+
 def main(unused_argv):
   tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -239,6 +272,7 @@ def main(unused_argv):
           samples[common.IMAGE],
           model_options=model_options,
           image_pyramid=FLAGS.image_pyramid)
+      prob_output = None
     else:
       tf.logging.info('Performing multi-scale test.')
       predictions = model.predict_labels_multi_scale(
@@ -246,6 +280,10 @@ def main(unused_argv):
           model_options=model_options,
           eval_scales=FLAGS.eval_scales,
           add_flipped_images=FLAGS.add_flipped_images)
+
+      prob_output = predictions[common.OUTPUT_TYPE + '_raw']
+
+
     predictions = predictions[common.OUTPUT_TYPE]
 
     if FLAGS.min_resize_value and FLAGS.max_resize_value:
@@ -305,17 +343,29 @@ def main(unused_argv):
 
         while not sess.should_stop():
           tf.logging.info('Visualizing batch %d', batch + 1)
-          _process_batch(sess=sess,
-                         original_images=samples[common.ORIGINAL_IMAGE],
-                         semantic_predictions=predictions,
-                         image_names=samples[common.IMAGE_NAME],
-                         image_heights=samples[common.HEIGHT],
-                         image_widths=samples[common.WIDTH],
-                         image_id_offset=image_id_offset,
-                         save_dir=save_dir,
-                         raw_save_dir=raw_save_dir,
-                         train_id_to_eval_id=train_id_to_eval_id,
-                         save_original_image=FLAGS.save_original_image)
+          if not FLAGS.prob_output_mode:
+              _process_batch(sess=sess,
+                             original_images=samples[common.ORIGINAL_IMAGE],
+                             semantic_predictions=predictions,
+                             image_names=samples[common.IMAGE_NAME],
+                             image_heights=samples[common.HEIGHT],
+                             image_widths=samples[common.WIDTH],
+                             image_id_offset=image_id_offset,
+                             save_dir=save_dir,
+                             raw_save_dir=raw_save_dir,
+                             train_id_to_eval_id=train_id_to_eval_id,
+                             save_original_image=FLAGS.save_original_image)
+          else:
+              _process_batch2(sess=sess,
+                             original_images=samples[common.ORIGINAL_IMAGE],
+                             semantic_predictions=predictions,
+                             prob_predictions=prob_output,
+                             image_names=samples[common.IMAGE_NAME],
+                             image_heights=samples[common.HEIGHT],
+                             image_widths=samples[common.WIDTH],
+                             image_id_offset=image_id_offset,
+                             save_dir=save_dir,
+                             train_id_to_eval_id=train_id_to_eval_id)
           image_id_offset += FLAGS.vis_batch_size
           batch += 1
 

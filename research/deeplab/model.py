@@ -116,6 +116,8 @@ def predict_labels_multi_scale(images,
       for output in model_options.outputs_to_num_classes
   }
 
+  scaled_logits = {}
+
   for i, image_scale in enumerate(eval_scales):
     with tf.variable_scope(tf.get_variable_scope(), reuse=True if i else None):
       outputs_to_scales_to_logits = multi_scale_logits(
@@ -125,6 +127,9 @@ def predict_labels_multi_scale(images,
           is_training=False,
           fine_tune_batch_norm=False)
 
+      scaled_logits['{}_a'.format(image_scale)] = \
+          tf.nn.softmax(outputs_to_scales_to_logits['semantic'][MERGED_LOGITS_SCOPE])
+
     if add_flipped_images:
       with tf.variable_scope(tf.get_variable_scope(), reuse=True):
         outputs_to_scales_to_logits_reversed = multi_scale_logits(
@@ -133,6 +138,11 @@ def predict_labels_multi_scale(images,
             image_pyramid=[image_scale],
             is_training=False,
             fine_tune_batch_norm=False)
+
+        scaled_logits['{}_b'.format(image_scale)] = \
+            tf.reverse(tf.nn.softmax(
+                outputs_to_scales_to_logits_reversed['semantic'][MERGED_LOGITS_SCOPE]),
+                axis=[2])
 
     for output in sorted(outputs_to_scales_to_logits):
       scales_to_logits = outputs_to_scales_to_logits[output]
@@ -154,9 +164,9 @@ def predict_labels_multi_scale(images,
             tf.expand_dims(tf.nn.softmax(logits_reversed), 4))
 
   for output in sorted(outputs_to_predictions):
-    predictions = outputs_to_predictions[output]
+    outputs_to_predictions[output + '_raw'] = scaled_logits
     # Compute average prediction across different scales and flipped images.
-    predictions = tf.reduce_mean(tf.concat(predictions, 4), axis=4)
+    predictions = tf.reduce_mean(tf.concat(outputs_to_predictions[output], 4), axis=4)
     outputs_to_predictions[output] = tf.argmax(predictions, 3)
 
   return outputs_to_predictions
@@ -313,10 +323,11 @@ def multi_scale_logits(images,
         nas_training_hyper_parameters=nas_training_hyper_parameters)
 
     # Resize the logits to have the same dimension before merging.
-    for output in sorted(outputs_to_logits):
-      outputs_to_logits[output] = _resize_bilinear(
-          outputs_to_logits[output], [logits_height, logits_width],
-          outputs_to_logits[output].dtype)
+    if len(image_pyramid) != 1:
+      for output in sorted(outputs_to_logits):
+        outputs_to_logits[output] = _resize_bilinear(
+            outputs_to_logits[output], [logits_height, logits_width],
+            outputs_to_logits[output].dtype)
 
     # Return when only one input scale.
     if len(image_pyramid) == 1:
