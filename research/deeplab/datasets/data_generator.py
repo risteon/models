@@ -196,6 +196,8 @@ class Dataset(object):
     self.should_shuffle = should_shuffle
     self.should_repeat = should_repeat
 
+    self.length = None
+
     self.num_of_classes = _DATASETS_INFORMATION[self.dataset_name].num_classes
     self.ignore_label = _DATASETS_INFORMATION[self.dataset_name].ignore_label
 
@@ -344,6 +346,7 @@ class Dataset(object):
         dataset = tf.data.Dataset.from_tensor_slices(tf.convert_to_tensor(files))\
             .map(self._read_from_png)\
             .map(self._preprocess_image, num_parallel_calls=self.num_readers)
+        self.length = len(files)
 
     else:
         files = self._get_all_files(file_pattern=_FILE_PATTERN % self.split_name)

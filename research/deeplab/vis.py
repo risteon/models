@@ -17,14 +17,21 @@
 
 See model.py for more details and usage.
 """
+import os
 import os.path
 import time
 import numpy as np
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 from deeplab import common
 from deeplab import model
 from deeplab.datasets import data_generator
 from deeplab.utils import save_annotation
+
+try:
+    import progressbar
+except ImportError:
+    progressbar = None
 
 flags = tf.app.flags
 
@@ -255,7 +262,7 @@ def main(unused_argv):
   if FLAGS.also_save_raw_predictions:
       tf.gfile.MakeDirs(raw_save_dir)
 
-  tf.logging.info('Visualizing on %s set', FLAGS.vis_split)
+  # tf.logging.info('Visualizing on %s set', FLAGS.vis_split)
 
   with tf.Graph().as_default():
     samples = dataset.get_one_shot_iterator(kitti_png_mode=FLAGS.folder_png_mode).get_next()
@@ -267,14 +274,14 @@ def main(unused_argv):
         output_stride=FLAGS.output_stride)
 
     if tuple(FLAGS.eval_scales) == (1.0,):
-      tf.logging.info('Performing single-scale test.')
+      # tf.logging.info('Performing single-scale test.')
       predictions = model.predict_labels(
           samples[common.IMAGE],
           model_options=model_options,
           image_pyramid=FLAGS.image_pyramid)
       prob_output = None
     else:
-      tf.logging.info('Performing multi-scale test.')
+      # tf.logging.info('Performing multi-scale test.')
       predictions = model.predict_labels_multi_scale(
           samples[common.IMAGE],
           model_options=model_options,
@@ -324,10 +331,15 @@ def main(unused_argv):
         break
       num_iteration += 1
 
-      tf.logging.info(
-          'Starting visualization at ' + time.strftime('%Y-%m-%d-%H:%M:%S',
-                                                       time.gmtime()))
-      tf.logging.info('Visualizing with model %s', checkpoint_path)
+      # tf.logging.info(
+      #     'Starting visualization at ' + time.strftime('%Y-%m-%d-%H:%M:%S',
+      #                                                  time.gmtime()))
+      # tf.logging.info('Visualizing with model %s', checkpoint_path)
+
+      if progressbar is not None:
+          bar = progressbar.ProgressBar(max_value=dataset.length)
+      else:
+          bar = None
 
       tf.train.get_or_create_global_step()
 
@@ -342,7 +354,6 @@ def main(unused_argv):
         image_id_offset = 0
 
         while not sess.should_stop():
-          tf.logging.info('Visualizing batch %d', batch + 1)
           if not FLAGS.prob_output_mode:
               _process_batch(sess=sess,
                              original_images=samples[common.ORIGINAL_IMAGE],
@@ -368,10 +379,9 @@ def main(unused_argv):
                              train_id_to_eval_id=train_id_to_eval_id)
           image_id_offset += FLAGS.vis_batch_size
           batch += 1
+          if bar is not None:
+              bar.update(batch)
 
-      tf.logging.info(
-          'Finished visualization at ' + time.strftime('%Y-%m-%d-%H:%M:%S',
-                                                       time.gmtime()))
 
 if __name__ == '__main__':
   flags.mark_flag_as_required('checkpoint_dir')
